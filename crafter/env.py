@@ -33,6 +33,8 @@ class Env(BaseClass):
     self._area = area
     self._view = view
     self._size = size
+    self.aug_size = np.array((self._size[0], self._size[1] * (self._view[1] + 3) // self._view[1]))
+    self.aug_view = np.array((self._view[0], self._view[1] + 3))
     self._reward = reward
     self._length = length
     self._seed = seed
@@ -101,7 +103,7 @@ class Env(BaseClass):
         if count > 0 and name not in self._unlocked}
     if unlocked:
       self._unlocked |= unlocked
-      reward += 1.0
+      # reward += 1.0
     dead = self._player.health <= 0
     over = self._length and self._step >= self._length
     done = dead or over
@@ -111,6 +113,7 @@ class Env(BaseClass):
         'discount': 1 - float(dead),
         'semantic': self._sem_view(),
         'player_pos': self._player.pos,
+        'player_facing': self._player.facing,
         'reward': reward,
     }
     if not self._reward:
@@ -128,6 +131,46 @@ class Env(BaseClass):
     (x, y), (w, h) = border, view.shape[:2]
     canvas[x: x + w, y: y + h] = view
     return canvas.transpose((1, 0, 2))
+
+  def render_target(self, target, dist, reward):
+    size = self.aug_size
+    view = self.aug_view
+    unit = size // view
+    canvas = np.zeros(tuple(size) + (3,), np.uint8)
+    local_view = self._local_view(self._player, unit)
+    item_view = self._item_view(self._player.inventory, unit)
+    target_view = self._target_view(target, unit, dist, reward)
+    filler = np.concatenate([local_view, item_view, target_view], 1)
+    border = (size - (size // view) * view) // 2
+    (x, y), (w, h) = border, filler.shape[:2]
+    canvas[x: x + w, y: y + h] = filler
+    return canvas.transpose((1, 0, 2))
+
+  def _draw(self, canvas, pos, texture):
+    (x, y), (w, h) = pos, texture.shape[:2]
+    if texture.shape[-1] == 4:
+      texture = texture[..., :3]
+    canvas[x: x + w, y: y + h] = texture
+
+  def _target_view(self, target, unit, dist, reward):
+    grid = [self._view[0], 3]
+    canvas = np.zeros(tuple(grid * unit) + (3,), np.uint8) + 127
+    texture = self._textures.get(target, unit)
+    self._draw(canvas, np.array([0, 0]) * unit, texture)
+    if dist is None:
+      dist = 999
+    if reward is None:
+      reward = 0
+    for i, d in enumerate(str(dist)):
+      self._draw(canvas, np.array([i, 1] * unit), self._textures.get(str(d), unit))
+    for i, d in enumerate(str(reward)):
+      if d == '-':
+        self._draw(canvas, np.array([i, 2] * unit), self._textures.get("dash", unit))
+      elif d == '.':
+        self._draw(canvas, np.array([i, 2] * unit), self._textures.get("dot", unit))
+      else:
+        self._draw(canvas, np.array([i, 2] * unit), self._textures.get(str(d), unit))
+    return canvas
 
   def _obs(self):
     return self.render()
