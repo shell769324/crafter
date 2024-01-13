@@ -33,8 +33,8 @@ class Env(BaseClass):
     self._area = area
     self._view = view
     self._size = size
-    self.aug_size = np.array((self._size[0], self._size[1] * (self._view[1] + 3) // self._view[1]))
-    self.aug_view = np.array((self._view[0], self._view[1] + 3))
+    self.aug_size = np.array((self._size[0], self._size[1] * (self._view[1] + 5) // self._view[1]))
+    self.aug_view = np.array((self._view[0], self._view[1] + 5))
     self._reward = reward
     self._length = length
     self._seed = seed
@@ -132,14 +132,14 @@ class Env(BaseClass):
     canvas[x: x + w, y: y + h] = view
     return canvas.transpose((1, 0, 2))
 
-  def render_target(self, target, dist, reward):
+  def render_target(self, target, dist, reward, value, predicted_reward, actual_where, predicted_where, actor_mode, front, step):
     size = self.aug_size
     view = self.aug_view
     unit = size // view
     canvas = np.zeros(tuple(size) + (3,), np.uint8)
     local_view = self._local_view(self._player, unit)
     item_view = self._item_view(self._player.inventory, unit)
-    target_view = self._target_view(target, unit, dist, reward)
+    target_view = self._target_view(target, unit, dist, reward, value, predicted_reward, actual_where, predicted_where, actor_mode, front, step)
     filler = np.concatenate([local_view, item_view, target_view], 1)
     border = (size - (size // view) * view) // 2
     (x, y), (w, h) = border, filler.shape[:2]
@@ -152,24 +152,73 @@ class Env(BaseClass):
       texture = texture[..., :3]
     canvas[x: x + w, y: y + h] = texture
 
-  def _target_view(self, target, unit, dist, reward):
-    grid = [self._view[0], 3]
-    canvas = np.zeros(tuple(grid * unit) + (3,), np.uint8) + 127
+  def _target_view(self, target, unit, dist, reward, value, predicted_reward, actual_where, predicted_where, actor_mode, front, step):
+    grid = [self._view[0], self.aug_view[1] - self._view[1]]
+    canvas = np.zeros(tuple(grid * unit) + (3,), np.uint8)
     texture = self._textures.get(target, unit)
     self._draw(canvas, np.array([0, 0]) * unit, texture)
+    self._draw(canvas, np.array([1, 0] * unit), self._textures.get(str(actor_mode), unit))
+    aware = ["water", "stone", "tree", "coal", "iron", "cow", "lava", "zombie", "skeleton"]
+    if front < len(predicted_where):
+      self._draw(canvas, np.array([2, 0] * unit), self._textures.get(aware[front], unit))
+    for i, d in enumerate(str(step)):
+      self._draw(canvas, np.array([i + 3, 0] * unit), self._textures.get(str(d), unit))
+    for i in range(len(actual_where)):
+      quarter = unit // 2
+      texture = self._textures.get(aware[i], quarter)
+      if actual_where[i][0] == 1:
+        self._draw(canvas, np.array([i, 1] * unit), texture)
+      if actual_where[i][1] == 1:
+        self._draw(canvas, np.array([i, 1]) * unit + np.array([1, 0]) * quarter, texture)
+      if actual_where[i][2] == 1:
+        self._draw(canvas, np.array([i, 1]) * unit + np.array([0, 1]) * quarter, texture)
+      if actual_where[i][3] == 1:
+        self._draw(canvas, np.array([i, 1]) * unit + np.array([1, 1]) * quarter, texture)
+    for i in range(len(predicted_where)):
+      quarter = unit // 2
+      texture = self._textures.get(aware[i], quarter)
+      if predicted_where[i][0] == 1:
+        self._draw(canvas, np.array([i, 2] * unit), texture)
+      if predicted_where[i][1] == 1:
+        self._draw(canvas, np.array([i, 2]) * unit + np.array([1, 0]) * quarter, texture)
+      if predicted_where[i][2] == 1:
+        self._draw(canvas, np.array([i, 2]) * unit + np.array([0, 1]) * quarter, texture)
+      if predicted_where[i][3] == 1:
+        self._draw(canvas, np.array([i, 2]) * unit + np.array([1, 1]) * quarter, texture)
+
     if dist is None:
       dist = 999
     if reward is None:
       reward = 0
     for i, d in enumerate(str(dist)):
-      self._draw(canvas, np.array([i, 1] * unit), self._textures.get(str(d), unit))
+      self._draw(canvas, np.array([i, 3] * unit), self._textures.get(str(d), unit))
+    value_str = "{:.2f}".format(value)
+    prev = 4
+    for d in str(value_str):
+      if d == '-':
+        self._draw(canvas, np.array([prev, 3] * unit), self._textures.get("dash", unit))
+      elif d == '.':
+        self._draw(canvas, np.array([prev, 3] * unit), self._textures.get("dot", unit))
+      else:
+        self._draw(canvas, np.array([prev, 3] * unit), self._textures.get(str(d), unit))
+      prev += 1
     for i, d in enumerate(str(reward)):
       if d == '-':
-        self._draw(canvas, np.array([i, 2] * unit), self._textures.get("dash", unit))
+        self._draw(canvas, np.array([i, 4] * unit), self._textures.get("dash", unit))
       elif d == '.':
-        self._draw(canvas, np.array([i, 2] * unit), self._textures.get("dot", unit))
+        self._draw(canvas, np.array([i, 4] * unit), self._textures.get("dot", unit))
       else:
-        self._draw(canvas, np.array([i, 2] * unit), self._textures.get(str(d), unit))
+        self._draw(canvas, np.array([i, 4] * unit), self._textures.get(str(d), unit))
+    prev = 4
+    predicted_reward_str = "{:.2f}".format(predicted_reward)
+    for d in str(predicted_reward_str):
+      if d == '-':
+        self._draw(canvas, np.array([prev, 4] * unit), self._textures.get("dash", unit))
+      elif d == '.':
+        self._draw(canvas, np.array([prev, 4] * unit), self._textures.get("dot", unit))
+      else:
+        self._draw(canvas, np.array([prev, 4] * unit), self._textures.get(str(d), unit))
+      prev += 1
     return canvas
 
   def _obs(self):

@@ -47,11 +47,11 @@ items:
   coal: {max: 9, initial: 0}
   iron: {max: 9, initial: 0}
   diamond: {max: 9, initial: 0}
-  wood_pickaxe: {max: 9, initial: 0}
-  stone_pickaxe: {max: 9, initial: 0}
+  wood_pickaxe: {max: 9, initial: 1}
+  stone_pickaxe: {max: 9, initial: 1}
   iron_pickaxe: {max: 9, initial: 0}
   wood_sword: {max: 9, initial: 0}
-  stone_sword: {max: 9, initial: 0}
+  stone_sword: {max: 9, initial: 1}
   iron_sword: {max: 9, initial: 0}
 
 collect:
